@@ -1,176 +1,155 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Grid, Card, Title, Button, TextInput, TabGroup, TabList, Tab, TabPanels, TabPanel } from '@tremor/react'
-import LoadingState from './components/LoadingState'
-import VideoInfoCard from './components/VideoInfoCard'
-import KPICard from './components/KPICard'
-import SentimentBarChart from './components/SentimentBarChart'
-import CommentCard from './components/CommentCard'
+import { Card, Title } from '@tremor/react'
+import { motion } from 'framer-motion'
+import KPIStrip from './components/dashboard/KPIStrip'
+import SentimentDonut from './components/dashboard/SentimentDonut'
+import SentimentTrendLine from './components/dashboard/SentimentTrendLine'
+import WordCloudComponent from './components/dashboard/WordCloudComponent'
+import NGramBarChart from './components/dashboard/NGramBarChart'
+import Header from './components/layout/Header'
+import SearchBar from './components/input/SearchBar'
+import LoadingOverlay from './components/feedback/LoadingOverlay'
+
+// Animation variants for staggered reveal
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+}
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100
+    }
+  }
+}
 
 function App() {
-  const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (url) => {
     setLoading(true)
     setError('')
     setData(null)
 
     try {
+      // Simulate a slight delay to show off the loading animation (optional, remove in prod if needed)
+      // await new Promise(r => setTimeout(r, 2000)) 
+
       const response = await axios.post('/analyze', {
         video_url: url
       })
       setData(response.data)
     } catch (err) {
+      console.error(err)
       setError(err.response?.data?.detail || 'An error occurred while analyzing.')
     } finally {
       setLoading(false)
     }
   }
 
-  // Filter comments by sentiment
-  const getFilteredComments = (filter) => {
-    if (!data?.comments) return []
-
-    switch (filter) {
-      case 'positive':
-        return data.comments.filter(c => c.sentiment === 'Positive').slice(0, 10)
-      case 'negative':
-        return data.comments.filter(c => c.sentiment === 'Negative').slice(0, 10)
-      case 'confidence':
-        return [...data.comments].sort((a, b) => (b.confidence || 85) - (a.confidence || 85)).slice(0, 10)
-      default:
-        return data.comments.slice(0, 20)
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl">
-            YouTube Sentiment Analysis
-          </h1>
-          <p className="mt-3 text-xl text-gray-600">
-            Analyze the sentiment of YouTube video comments with AI
-          </p>
-        </div>
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 overflow-y-auto selection:bg-blue-500/30">
+      {/* Background Gradient Mesh */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/20 rounded-full blur-[128px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/20 rounded-full blur-[128px]" />
+      </div>
 
-        {/* Input Section */}
-        <Card className="mb-8">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <TextInput
-              placeholder="Paste YouTube URL here..."
-              value={url}
-              onValueChange={setUrl}
-              className="flex-1"
-              disabled={loading}
-            />
-            <Button
-              onClick={handleAnalyze}
-              disabled={loading || !url}
-              size="lg"
-              className="sm:w-auto w-full"
-            >
-              {loading ? 'Analyzing...' : 'Analyze'}
-            </Button>
-          </div>
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-lg border border-red-200 text-sm">
-              {error}
+      <LoadingOverlay isLoading={loading} />
+
+      <div className="max-w-7xl mx-auto relative z-10">
+        <Header />
+
+        <SearchBar onAnalyze={handleAnalyze} loading={loading} />
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl text-center mb-8 backdrop-blur-sm"
+          >
+            {error}
+          </motion.div>
+        )}
+
+        {/* Dashboard Content */}
+        {data && (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-6"
+          >
+            {/* Row 1: Video Info & KPIs */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Video Info Card */}
+              <motion.div variants={itemVariants} className="lg:col-span-1">
+                <Card className="h-full bg-gray-900/40 border-gray-800 backdrop-blur-md hover:border-gray-700 transition-colors">
+                  <div className="relative group overflow-hidden rounded-lg mb-4">
+                    <img
+                      src={data.video_info.thumbnail}
+                      alt="Thumbnail"
+                      className="w-full h-32 object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                    />
+                  </div>
+                  <Title className="text-white text-lg line-clamp-2 mb-2 font-bold">{data.video_info.title}</Title>
+                  <p className="text-gray-400 text-sm">{data.video_info.channel}</p>
+                </Card>
+              </motion.div>
+
+              {/* KPI Strip */}
+              <motion.div variants={itemVariants} className="lg:col-span-3">
+                <KPIStrip kpi={data.kpi} totalComments={data.video_info.total_comments} />
+              </motion.div>
             </div>
-          )}
-        </Card>
 
-        {/* Loading State */}
-        {loading && <LoadingState />}
+            {/* Row 2: Sentiment Distribution & Trends */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
+                  <Title className="text-white mb-6">Sentiment Distribution</Title>
+                  <SentimentDonut distribution={data.sentiment_distribution} score={data.kpi.sentiment_score} />
+                </Card>
+              </motion.div>
 
-        {/* Results */}
-        {data && !loading && (
-          <div className="space-y-6">
-            {/* Video Info */}
-            <VideoInfoCard videoData={data} />
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
+                  <Title className="text-white mb-6">Sentiment Trend (Last 24h)</Title>
+                  <SentimentTrendLine data={data.trend_data} />
+                </Card>
+              </motion.div>
+            </div>
 
-            {/* KPIs */}
-            <Grid numItemsSm={2} numItemsLg={4} className="gap-6">
-              <KPICard
-                title="Total Comments"
-                value={data.total_comments}
-                icon="💬"
-                color="blue"
-              />
-              <KPICard
-                title="Positive"
-                value={`${data.stats.positive_pct}%`}
-                subtitle={`${data.stats.positive} comments`}
-                icon="😊"
-                color="green"
-              />
-              <KPICard
-                title="Negative"
-                value={`${data.stats.negative_pct}%`}
-                subtitle={`${data.stats.negative} comments`}
-                icon="😞"
-                color="red"
-              />
-              <KPICard
-                title="Sentiment Score"
-                value={data.stats.positive_pct > 50 ? 'Positive' : 'Negative'}
-                subtitle={`${Math.abs(data.stats.positive_pct - data.stats.negative_pct).toFixed(1)}% difference`}
-                icon="📊"
-                color={data.stats.positive_pct > 50 ? 'green' : 'red'}
-              />
-            </Grid>
+            {/* Row 3: Topic Insights */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
+                  <Title className="text-white mb-6">Topic Word Cloud</Title>
+                  <WordCloudComponent data={data.word_cloud_data} />
+                </Card>
+              </motion.div>
 
-            {/* Sentiment Visualization */}
-            <SentimentBarChart stats={data.stats} />
-
-            {/* Comments Section */}
-            <Card>
-              <Title className="mb-4">Actionable Comments</Title>
-              <TabGroup>
-                <TabList className="mb-4">
-                  <Tab>All Comments</Tab>
-                  <Tab>Most Positive</Tab>
-                  <Tab>Most Negative</Tab>
-                  <Tab>Highest Confidence</Tab>
-                </TabList>
-                <TabPanels>
-                  <TabPanel>
-                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                      {getFilteredComments('all').map((comment, index) => (
-                        <CommentCard key={index} comment={comment} />
-                      ))}
-                    </div>
-                  </TabPanel>
-                  <TabPanel>
-                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                      {getFilteredComments('positive').map((comment, index) => (
-                        <CommentCard key={index} comment={comment} />
-                      ))}
-                    </div>
-                  </TabPanel>
-                  <TabPanel>
-                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                      {getFilteredComments('negative').map((comment, index) => (
-                        <CommentCard key={index} comment={comment} />
-                      ))}
-                    </div>
-                  </TabPanel>
-                  <TabPanel>
-                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                      {getFilteredComments('confidence').map((comment, index) => (
-                        <CommentCard key={index} comment={comment} />
-                      ))}
-                    </div>
-                  </TabPanel>
-                </TabPanels>
-              </TabGroup>
-            </Card>
-          </div>
+              <motion.div variants={itemVariants}>
+                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
+                  <Title className="text-white mb-6">Top Phrases (N-Grams)</Title>
+                  <NGramBarChart data={data.ngram_data} />
+                </Card>
+              </motion.div>
+            </div>
+          </motion.div>
         )}
       </div>
     </div>
@@ -178,3 +157,4 @@ function App() {
 }
 
 export default App
+
