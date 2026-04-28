@@ -2,9 +2,17 @@ import { useCallback, memo } from 'react'
 import WordCloud from 'react-d3-cloud'
 
 const WordCloudComponent = memo(function WordCloudComponent({ data }) {
-    if (!data || data.length === 0) return null
+    console.log("WORD CLOUD DATA:", data)
 
-    const fontSizeMapper = useCallback((word) => Math.log2(word.value) * 4 + 12, [])
+    if (!data || data.length === 0) {
+        return (
+            <div style={{ width: '100%', height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
+                No word cloud data available
+            </div>
+        )
+    }
+
+    const fontSizeMapper = useCallback((word) => Math.log2(word.value) * 10 + 14, [])
     const rotate = useCallback(() => 0, [])
 
     const fillMapper = useCallback((word) => {
@@ -14,12 +22,14 @@ const WordCloudComponent = memo(function WordCloudComponent({ data }) {
     }, [])
 
     return (
-        <div className="h-64 w-full flex items-center justify-center bg-gray-900/30 rounded-lg">
+        <div style={{ width: '100%', height: '300px' }}>
             <WordCloud
                 data={data}
+                width={500}
+                height={300}
                 fontSize={fontSizeMapper}
                 rotate={rotate}
-                padding={4}
+                padding={5}
                 fill={fillMapper}
                 font="Inter"
             />

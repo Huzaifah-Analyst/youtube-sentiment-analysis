@@ -1,160 +1,135 @@
-import { useState } from 'react'
-import axios from 'axios'
-import { Card, Title } from '@tremor/react'
-import { motion } from 'framer-motion'
-import KPIStrip from './components/dashboard/KPIStrip'
-import SentimentDonut from './components/dashboard/SentimentDonut'
-import SentimentTrendLine from './components/dashboard/SentimentTrendLine'
-import WordCloudComponent from './components/dashboard/WordCloudComponent'
-import NGramBarChart from './components/dashboard/NGramBarChart'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import Dashboard from './pages/Dashboard'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+import History from './pages/History'
+import Compare from './pages/Compare'
+import Admin from './pages/Admin'
 import Header from './components/layout/Header'
-import SearchBar from './components/input/SearchBar'
-import LoadingOverlay from './components/feedback/LoadingOverlay'
+import { ToastContainer } from './components/ui/Toast'
 
-// Animation variants for staggered reveal
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
+// Page titles per route
+const PAGE_TITLES = {
+  '/': 'YT Vibe Check | Dashboard',
+  '/history': 'YT Vibe Check | History',
+  '/compare': 'YT Vibe Check | Compare',
+  '/login': 'YT Vibe Check | Login',
+  '/signup': 'YT Vibe Check | Sign Up',
+  '/admin': 'YT Vibe Check | Admin',
 }
 
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      type: "spring",
-      stiffness: 100
-    }
-  }
+function TitleManager() {
+  const location = useLocation()
+  useEffect(() => {
+    document.title = PAGE_TITLES[location.pathname] || 'YT Vibe Check'
+  }, [location.pathname])
+  return null
 }
 
-function App() {
-  const [loading, setLoading] = useState(false)
-  const [data, setData] = useState(null)
-  const [error, setError] = useState('')
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { token, loading } = useAuth()
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div style={{ width: '48px', height: '48px', border: '4px solid rgba(99,102,241,0.2)', borderTopColor: '#6366f1', borderRadius: '50%' }} className="spin" />
+    </div>
+  )
+  if (!token) return <Navigate to="/login" />
+  return children
+}
 
-  const handleAnalyze = async (url) => {
-    setLoading(true)
-    setError('')
-    setData(null)
+// Admin Protected Route
+const AdminRoute = ({ children }) => {
+  const { user, token, loading } = useAuth()
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div style={{ width: '48px', height: '48px', border: '4px solid rgba(99,102,241,0.2)', borderTopColor: '#6366f1', borderRadius: '50%' }} className="spin" />
+    </div>
+  )
+  if (!token) return <Navigate to="/login" />
+  if (user && !user.is_admin) return <Navigate to="/" />
+  return children
+}
 
-    try {
-      // Simulate a slight delay to show off the loading animation (optional, remove in prod if needed)
-      // await new Promise(r => setTimeout(r, 2000)) 
-
-      const response = await axios.post('/analyze', {
-        video_url: url
-      })
-      setData(response.data)
-    } catch (err) {
-      console.error(err)
-      setError(err.response?.data?.detail || 'An error occurred while analyzing.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
+function Footer() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 overflow-y-auto selection:bg-blue-500/30">
+    <footer style={{
+      textAlign: 'center',
+      padding: '28px 16px',
+      borderTop: '1px solid rgba(255,255,255,0.06)',
+      marginTop: '60px',
+      color: '#475569',
+      fontSize: '0.8rem',
+      fontWeight: 500,
+      letterSpacing: '0.04em',
+    }}>
+      YT Vibe Check &nbsp;|&nbsp; FYP 2026 &nbsp;|&nbsp; UET Taxila
+    </footer>
+  )
+}
+
+function AppContent() {
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)', overflowY: 'auto' }}>
       {/* Background Gradient Mesh */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/20 rounded-full blur-[128px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/20 rounded-full blur-[128px]" />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', top: '-10%', left: '-10%', width: '40%', height: '40%', background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)', borderRadius: '50%', filter: 'blur(80px)' }} />
+        <div style={{ position: 'absolute', bottom: '-10%', right: '-10%', width: '40%', height: '40%', background: 'radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)', borderRadius: '50%', filter: 'blur(80px)' }} />
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '60%', height: '60%', background: 'radial-gradient(circle, rgba(99,102,241,0.04) 0%, transparent 60%)', borderRadius: '50%', filter: 'blur(100px)' }} />
       </div>
 
-      <LoadingOverlay isLoading={loading} />
-
-      <div className="max-w-7xl mx-auto relative z-10">
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', position: 'relative', zIndex: 10 }}>
+        <TitleManager />
         <Header />
-
-        <SearchBar onAnalyze={handleAnalyze} loading={loading} />
-
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl text-center mb-8 backdrop-blur-sm"
-          >
-            {error}
-          </motion.div>
-        )}
-
-        {/* Dashboard Content */}
-        {data && (
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-6"
-          >
-            {/* Row 1: Video Info & KPIs */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              {/* Video Info Card */}
-              <motion.div variants={itemVariants} className="lg:col-span-1">
-                <Card className="h-full bg-gray-900/40 border-gray-800 backdrop-blur-md hover:border-gray-700 transition-colors">
-                  <div className="relative group overflow-hidden rounded-lg mb-4">
-                    <img
-                      src={data.video_info.thumbnail}
-                      alt="Thumbnail"
-                      className="w-full h-32 object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
-                    />
-                  </div>
-                  <Title className="text-white text-lg line-clamp-2 mb-2 font-bold">{data.video_info.title}</Title>
-                  <p className="text-gray-400 text-sm">{data.video_info.channel}</p>
-                </Card>
-              </motion.div>
-
-              {/* KPI Strip */}
-              <motion.div variants={itemVariants} className="lg:col-span-3">
-                <KPIStrip kpi={data.kpi} totalComments={data.video_info.total_comments} />
-              </motion.div>
-            </div>
-
-            {/* Row 2: Sentiment Distribution & Trends */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <motion.div variants={itemVariants}>
-                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
-                  <Title className="text-white mb-6">Sentiment Distribution</Title>
-                  <SentimentDonut distribution={data.sentiment_distribution} score={data.kpi.sentiment_score} />
-                </Card>
-              </motion.div>
-
-              <motion.div variants={itemVariants}>
-                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
-                  <Title className="text-white mb-6">Sentiment Trend (Last 24h)</Title>
-                  <SentimentTrendLine data={data.trend_data} />
-                </Card>
-              </motion.div>
-            </div>
-
-            {/* Row 3: Topic Insights */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <motion.div variants={itemVariants}>
-                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
-                  <Title className="text-white mb-6">Topic Word Cloud</Title>
-                  <WordCloudComponent data={data.word_cloud_data} />
-                </Card>
-              </motion.div>
-
-              <motion.div variants={itemVariants}>
-                <Card className="bg-gray-900/40 border-gray-800 backdrop-blur-md">
-                  <Title className="text-white mb-6">Top Phrases (N-Grams)</Title>
-                  <NGramBarChart data={data.ngram_data} />
-                </Card>
-              </motion.div>
-            </div>
-          </motion.div>
-        )}
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute>
+                <History />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/compare"
+            element={
+              <ProtectedRoute>
+                <Compare />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <Admin />
+              </AdminRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+        <Footer />
       </div>
+
+      {/* Toast notifications */}
+      <ToastContainer />
     </div>
   )
 }
 
-export default App
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </AuthProvider>
+  )
+}
 
+export default App
