@@ -10,3 +10,10 @@ dist/
 logs/
 *.log
 .DS_Store
+backend/models/*.pkl
+backend/models/
+*.bin
+*.pt
+*.pth
+torch/
+transformers/
