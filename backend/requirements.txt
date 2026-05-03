@@ -7,10 +7,9 @@ joblib
 google-api-python-client
 python-dotenv
 python-multipart
-passlib[bcrypt]
+passlib
 python-jose[cryptography]
 email-validator
-bcrypt
 
 pymongo[srv]
 motor
