@@ -21,10 +21,11 @@ from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
 import numpy as np
 from datetime import datetime, timedelta
+import asyncio
+import resend
 import schemas
 import auth
 from database import client, users_collection, history_collection
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from hf_model import query_sentiment, query_emotion
 from bson import ObjectId
 
@@ -32,38 +33,30 @@ from bson import ObjectId
 load_dotenv(dotenv_path=Path(__file__).parent / '.env')
 
 # ── Email configuration ─────────────────────────────────────────────────────
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "")
-EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD", "")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "onboarding@resend.dev")
+ALLOW_EMAIL_OTP_FALLBACK = os.getenv("ALLOW_EMAIL_OTP_FALLBACK", "true").lower() == "true"
 
-mail_config = ConnectionConfig(
-    MAIL_USERNAME=EMAIL_ADDRESS,
-    MAIL_PASSWORD=EMAIL_APP_PASSWORD,
-    MAIL_FROM=EMAIL_ADDRESS,
-    MAIL_PORT=587,
-    MAIL_SERVER="smtp.gmail.com",
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=False,
-) if EMAIL_ADDRESS and EMAIL_APP_PASSWORD else None
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 async def send_otp_email(to_email: str, code: str):
-    if not mail_config:
+    if not RESEND_API_KEY:
         print(f"[EMAIL SKIPPED] OTP for {to_email}: {code}", flush=True)
         return
-    message = MessageSchema(
-        subject="YT Vibe Check \u2014 Verify Your Email",
-        recipients=[to_email],
-        body=f"""Your verification code is: {code}
+    payload = {
+        "from": EMAIL_FROM,
+        "to": [to_email],
+        "subject": "YT Vibe Check - Verify Your Email",
+        "text": f"""Your verification code is: {code}
 
 Valid for 10 minutes.
 If you did not sign up, ignore this email.
 
-\u2014 YT Vibe Check""",
-        subtype=MessageType.plain,
-    )
-    fm = FastMail(mail_config)
-    await fm.send_message(message)
+- YT Vibe Check""",
+    }
+    # Resend SDK is sync; run in thread to keep endpoint non-blocking.
+    await asyncio.to_thread(resend.Emails.send, payload)
     print(f"[EMAIL SENT] OTP to {to_email}", flush=True)
 
 app = FastAPI(title="YouTube Sentiment Analysis API")
@@ -281,6 +274,13 @@ async def signup(user: schemas.UserCreate):
         await send_otp_email(user.email, code)
     except Exception as e:
         print(f"[EMAIL FAILED] Error: {e}", flush=True)
+        if ALLOW_EMAIL_OTP_FALLBACK:
+            return {
+                "message": "Email service unavailable. Use fallback verification code.",
+                "email": user.email,
+                "dev_code": code,
+                "email_sent": False,
+            }
         raise HTTPException(status_code=500, detail="Failed to send verification email. Please try again.")
 
     return {
@@ -320,8 +320,19 @@ async def resend_code(payload: schemas.ResendCodeRequest):
         {"$set": {"verification_code": code, "verification_expires": datetime.utcnow() + timedelta(minutes=10)}},
     )
 
-    await send_otp_email(user["email"], code)
-    return {"message": "New code sent"}
+    try:
+        await send_otp_email(user["email"], code)
+        return {"message": "New code sent", "email_sent": True}
+    except Exception as e:
+        print(f"[EMAIL FAILED] Resend error: {e}", flush=True)
+        if ALLOW_EMAIL_OTP_FALLBACK:
+            return {
+                "message": "Email service unavailable. Use fallback verification code.",
+                "email": user["email"],
+                "dev_code": code,
+                "email_sent": False,
+            }
+        raise HTTPException(status_code=500, detail="Failed to resend verification email. Please try again.")
 
 @app.post("/api/login", response_model=schemas.Token)
 async def login(user_credentials: schemas.UserLogin):

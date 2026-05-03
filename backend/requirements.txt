@@ -13,5 +13,5 @@ email-validator
 
 pymongo[srv]
 motor
-fastapi-mail==1.4.1
+resend
 
