@@ -73,7 +73,7 @@ const inputStyle = {
 };
 
 // ─── OTP Verification Screen ───────────────────────────────────────────────────
-function OTPScreen({ email, onSuccess }) {
+function OTPScreen({ email, onSuccess, fallbackCode }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -250,6 +250,21 @@ function OTPScreen({ email, onSuccess }) {
         </form>
 
         {/* Resend */}
+        {fallbackCode && (
+          <div style={{
+            marginTop: '16px',
+            background: 'rgba(245,158,11,0.12)',
+            border: '1px solid rgba(245,158,11,0.35)',
+            borderRadius: '10px',
+            color: '#fde68a',
+            padding: '10px 12px',
+            textAlign: 'center',
+            fontSize: '0.85rem',
+          }}>
+            Email service unavailable. Use this verification code: <strong>{fallbackCode}</strong>
+          </div>
+        )}
+
         <div style={{ marginTop: '20px', textAlign: 'center' }}>
           <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0 0 10px' }}>
             Didn't receive the code?
