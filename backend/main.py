@@ -24,7 +24,6 @@ from datetime import datetime, timedelta
 import schemas
 import auth
 from database import client, users_collection, history_collection
-from transformers import pipeline
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from hf_model import query_sentiment, query_emotion
 from bson import ObjectId
@@ -116,6 +115,9 @@ except Exception as e:
 
 emotion_pipeline = None
 try:
+    # Optional local fallback; avoid top-level import so deploys without transformers still start (HF API is primary).
+    from transformers import pipeline
+
     # Using top_k=1 to ensure consistent output shape
     emotion_pipeline = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base", top_k=1)
     print("Emotion pipeline loaded successfully", flush=True)
