@@ -30,6 +30,23 @@ const OrbBackground = () => (
   </div>
 );
 
+/** FastAPI sends `detail` as string or [{ msg, ... }]; axios network errors often have no response. */
+function signupErrorMessage(err) {
+  if (!err.response) {
+    const reason = err.message || '';
+    const base = reason.includes('Network') || err.code === 'ERR_NETWORK'
+      ? 'Cannot reach the API.'
+      : 'Cannot reach the API.';
+    return `${base} On Vercel, set Production (and Preview) env VITE_API_URL to your Render backend URL with no trailing slash, then redeploy.`;
+  }
+  const d = err.response.data?.detail;
+  if (!d) return err.response.status ? `Server error (${err.response.status})` : 'Signup failed';
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) return d.map((x) => x.msg || JSON.stringify(x)).join(' ');
+  if (typeof d === 'object' && d !== null && 'msg' in d) return String(d.msg);
+  return 'Signup failed';
+}
+
 const getStrength = (pw) => {
   if (!pw) return { label: '', color: 'transparent', width: '0%' };
   let score = 0;
@@ -301,7 +318,7 @@ const Signup = () => {
       }
       setStep('otp');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Signup failed');
+      setError(signupErrorMessage(err));
     } finally {
       setLoading(false);
     }
