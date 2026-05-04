@@ -43,7 +43,7 @@ if RESEND_API_KEY:
 async def send_otp_email(to_email: str, code: str):
     if not RESEND_API_KEY:
         print(f"[EMAIL SKIPPED] OTP for {to_email}: {code}", flush=True)
-        return
+        return {"email_sent": False, "reason": "resend_api_key_missing", "provider": "resend"}
     payload = {
         "from": EMAIL_FROM,
         "to": [to_email],
@@ -58,6 +58,7 @@ If you did not sign up, ignore this email.
     # Resend SDK is sync; run in thread to keep endpoint non-blocking.
     await asyncio.to_thread(resend.Emails.send, payload)
     print(f"[EMAIL SENT] OTP to {to_email}", flush=True)
+    return {"email_sent": True, "reason": None, "provider": "resend"}
 
 app = FastAPI(title="YouTube Sentiment Analysis API")
 
@@ -95,6 +96,7 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "models", "sentiment_model.pkl")
 VECTORIZER_PATH = os.path.join(BASE_DIR, "models", "tfidf_vectorizer.pkl")
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
 model = None
 vectorizer = None
@@ -105,6 +107,14 @@ try:
     print("Model and Vectorizer loaded successfully.", flush=True)
 except Exception as e:
     print(f"Warning: Model/Vectorizer not found. Error: {e}", flush=True)
+
+print(
+    "[MODEL CHECK] "
+    f"MODEL_PATH={MODEL_PATH} exists={os.path.exists(MODEL_PATH)} | "
+    f"VECTORIZER_PATH={VECTORIZER_PATH} exists={os.path.exists(VECTORIZER_PATH)}",
+    flush=True,
+)
+print(f"[HF CHECK] HF_API_TOKEN set={bool(HF_API_TOKEN)}", flush=True)
 
 emotion_pipeline = None
 try:
@@ -271,7 +281,7 @@ async def signup(user: schemas.UserCreate):
 
     # Try to send email
     try:
-        await send_otp_email(user.email, code)
+        email_status = await send_otp_email(user.email, code)
     except Exception as e:
         print(f"[EMAIL FAILED] Error: {e}", flush=True)
         if ALLOW_EMAIL_OTP_FALLBACK:
@@ -280,12 +290,24 @@ async def signup(user: schemas.UserCreate):
                 "email": user.email,
                 "dev_code": code,
                 "email_sent": False,
+                "email_reason": "provider_error",
             }
         raise HTTPException(status_code=500, detail="Failed to send verification email. Please try again.")
+
+    if not email_status["email_sent"] and ALLOW_EMAIL_OTP_FALLBACK:
+        return {
+            "message": "Email service unavailable. Use fallback verification code.",
+            "email": user.email,
+            "dev_code": code,
+            "email_sent": False,
+            "email_reason": email_status["reason"],
+        }
 
     return {
         "message": "Verification code sent",
         "email": user.email,
+        "email_sent": True,
+        "email_reason": None,
     }
 
 @app.post("/api/verify-email", response_model=schemas.Token)
@@ -321,8 +343,20 @@ async def resend_code(payload: schemas.ResendCodeRequest):
     )
 
     try:
-        await send_otp_email(user["email"], code)
-        return {"message": "New code sent", "email_sent": True}
+        email_status = await send_otp_email(user["email"], code)
+        if not email_status["email_sent"] and ALLOW_EMAIL_OTP_FALLBACK:
+            return {
+                "message": "Email service unavailable. Use fallback verification code.",
+                "email": user["email"],
+                "dev_code": code,
+                "email_sent": False,
+                "email_reason": email_status["reason"],
+            }
+        return {
+            "message": "New code sent",
+            "email_sent": True,
+            "email_reason": None,
+        }
     except Exception as e:
         print(f"[EMAIL FAILED] Resend error: {e}", flush=True)
         if ALLOW_EMAIL_OTP_FALLBACK:
@@ -331,6 +365,7 @@ async def resend_code(payload: schemas.ResendCodeRequest):
                 "email": user["email"],
                 "dev_code": code,
                 "email_sent": False,
+                "email_reason": "provider_error",
             }
         raise HTTPException(status_code=500, detail="Failed to resend verification email. Please try again.")
 
@@ -412,7 +447,7 @@ def process_sentiments_and_emotions(comments, cleaned_comments):
         results = query_sentiment(batch)
         if results:
             all_sentiments.extend(results)
-        else:
+        elif model is not None and vectorizer is not None:
             # Fallback to old pkl model for this batch
             batch_features = vectorizer.transform(batch)
             batch_probs = model.predict_proba(batch_features)
@@ -426,6 +461,11 @@ def process_sentiments_and_emotions(comments, cleaned_comments):
                 else:
                     label = "Negative"
                 all_sentiments.append({"label": label, "score": float(max_prob)})
+        else:
+            # Last-resort fallback when neither HF nor local model is available.
+            all_sentiments.extend(
+                [{"label": "Neutral", "score": 0.0} for _ in batch]
+            )
 
     # Emotion in batches
     all_emotions = []
@@ -475,8 +515,16 @@ async def analyze_sentiment(
     request: AnalysisRequest, 
     current_user: dict = Depends(auth.get_optional_current_user)
 ):
-    if not model or not vectorizer:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+    has_local_model = model is not None and vectorizer is not None
+    has_hf_token = bool(HF_API_TOKEN)
+    if not has_local_model and not has_hf_token:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No inference backend available. "
+                "Set HF_API_TOKEN or provide local model files in backend/models."
+            ),
+        )
 
     video_id = get_video_id(request.video_url)
     if not video_id:
@@ -639,8 +687,16 @@ async def analyze_sentiment(
 
 async def analyze_video_url(video_url: str):
     """Core analysis logic — reusable helper for both /analyze and /api/compare."""
-    if not model or not vectorizer:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+    has_local_model = model is not None and vectorizer is not None
+    has_hf_token = bool(HF_API_TOKEN)
+    if not has_local_model and not has_hf_token:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No inference backend available. "
+                "Set HF_API_TOKEN or provide local model files in backend/models."
+            ),
+        )
 
     video_id = get_video_id(video_url)
     if not video_id:

@@ -1,5 +1,6 @@
 import pandas as pd
 import joblib
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -49,8 +50,13 @@ def train_model(input_path, model_path, vectorizer_path):
     print("Model saved successfully.")
 
 if __name__ == "__main__":
-    input_csv = r"e:\study\7th sem\fyp\starting the project\processed_sentiment_data.csv"
-    model_file = r"e:\study\7th sem\fyp\starting the project\sentiment_model.pkl"
-    vectorizer_file = r"e:\study\7th sem\fyp\starting the project\tfidf_vectorizer.pkl"
+    backend_dir = Path(__file__).resolve().parent
+    project_root = backend_dir.parent
+    models_dir = backend_dir / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    input_csv = str(project_root / "processed_sentiment_data.csv")
+    model_file = str(models_dir / "sentiment_model.pkl")
+    vectorizer_file = str(models_dir / "tfidf_vectorizer.pkl")
     
     train_model(input_csv, model_file, vectorizer_file)

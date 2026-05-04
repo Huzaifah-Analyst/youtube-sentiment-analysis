@@ -76,6 +76,7 @@ const inputStyle = {
 function OTPScreen({ email, onSuccess, fallbackCode }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(60);
@@ -121,7 +122,7 @@ function OTPScreen({ email, onSuccess, fallbackCode }) {
     if (resendCountdown > 0) return;
     setResendLoading(true);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/resend-code`, { email });
+      const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/resend-code`, { email });
       setResendCountdown(60);
       // Restart timer
       clearInterval(timerRef.current);
@@ -132,8 +133,14 @@ function OTPScreen({ email, onSuccess, fallbackCode }) {
         });
       }, 1000);
       setError('');
+      if (res.data?.dev_code) {
+        setStatus('Email service unavailable. A fallback verification code is shown below.');
+      } else {
+        setStatus('A new verification code was sent to your email.');
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to resend code');
+      setStatus('');
     } finally {
       setResendLoading(false);
     }
@@ -189,6 +196,23 @@ function OTPScreen({ email, onSuccess, fallbackCode }) {
         </div>
 
         <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {status && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                background: 'rgba(59,130,246,0.12)',
+                border: '1px solid rgba(59,130,246,0.35)',
+                color: '#bfdbfe',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                fontSize: '0.85rem',
+                textAlign: 'center',
+              }}
+            >
+              {status}
+            </motion.div>
+          )}
           <div>
             <label style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
               Verification Code
